@@ -42,8 +42,8 @@ function collide(node1, node2, bounce) {
     if (dist < node1.offsetWidth / 2 + node2.offsetWidth / 2) {
         if (!node1.clipping) {
             dotP = node1.speed[0] * angle[0] + node1.speed[1] * angle[1];
-            node1.speed[0] -= 2 * dotP * angle[0] * bounce + 0.02 * node1.speed[0];
-            node1.speed[1] -= 2 * dotP * angle[1] * bounce + 0.02 * node1.speed[1];
+            node1.speed[0] -= 2 * dotP * angle[0] * bounce + 0.05 * node1.speed[0] * Math.abs(angle[1]);
+            node1.speed[1] -= 2 * dotP * angle[1] * bounce + 0.05 * node1.speed[1] * Math.abs(angle[0]);
             node1.clipping = true
         } else {
             node1.loc[0] += (node1.offsetWidth / 2 + node2.offsetWidth / 2 - dist) * angle[0]
@@ -91,7 +91,7 @@ setInterval(() => {
     angle = getAngle(moving, fixed);
     if (!moving.clipping){
         dist = getDist(moving, fixed);
-        move(moving, 1 / dist * angle[0], 1 / dist * angle[1])
+        move(moving, 500 / dist**2 * angle[0], 500 / dist**2 * angle[1])
     }
     if (!controlMode) {
         if (keys["ArrowLeft"]) {
@@ -103,26 +103,31 @@ setInterval(() => {
             moving.speed[1] -= angle[0] * 0.01
         }
         if (keys["ArrowUp"]) {
-            moving.speed[0] -= angle[0] * 0.01
-            moving.speed[1] -= angle[1] * 0.01
+            moving.speed[0] -= angle[0] * 0.02
+            moving.speed[1] -= angle[1] * 0.02
         }
         if (keys["ArrowDown"]) {
             moving.speed[0] += angle[0] * 0.05
             moving.speed[1] += angle[1] * 0.05
         }
     } else {
+        direction = [0, 0];
         if (keys["ArrowLeft"]) {
-            moving.speed[0] -= 0.01
+            direction[0] -= 1;
         }
         if (keys["ArrowRight"]) {
-            moving.speed[0] += 0.01
+            direction[0] += 1;
         }
         if (keys["ArrowUp"]) {
-            moving.speed[1] -= 0.01
+            direction[1] -= 1;
         }
         if (keys["ArrowDown"]) {
-            moving.speed[1] += 0.01
+            direction[1] += 1;
         }
+        norm = Math.sqrt(direction[0] ** 2 + direction[1] ** 2);
+        if(norm == 0) norm = 1;
+        moving.speed[0] += 0.02 * direction[0] / norm;
+        moving.speed[1] += 0.02 * direction[1] / norm;
     }
     render(keys["Control"] ? fixed : moving)
     moving.style.background = controlMode ? "radial-gradient(#000, #FFF)" : `linear-gradient(${Math.atan2(getCenter(fixed)[1] - getCenter(moving)[1], getCenter(fixed)[0] - getCenter(moving)[0]) - Math.PI / 2}rad, #FFF, #000)`
