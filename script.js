@@ -1,9 +1,10 @@
-const body = document.querySelector("body")
-const keys = {}
-moving.clipping = false
-moving.loc = [0, 0]
-moving.speed = [0, 0]
-let controlMode = false
+const body = document.querySelector("body");
+const keys = {};
+moving.clipping = false;
+moving.grounded = false;
+moving.loc = [0, 0];
+moving.speed = [0, 0];
+let controlMode = false;
 everyOther = true;
 function getCenter(obj) {
     return [obj.loc[0] + obj.offsetWidth / 2, obj.loc[1] + obj.offsetHeight / 2]
@@ -40,18 +41,20 @@ function collide(node1, node2, bounce) {
     dist = getDist(node1, node2);
     angle = getAngle(node2, node1);
     if (dist < node1.offsetWidth / 2 + node2.offsetWidth / 2) {
+        node1.grounded = true;
         if (!node1.clipping) {
             dotP = node1.speed[0] * angle[0] + node1.speed[1] * angle[1];
             node1.speed[0] -= 2 * dotP * angle[0] * bounce + 0.05 * node1.speed[0] * Math.abs(angle[1]);
             node1.speed[1] -= 2 * dotP * angle[1] * bounce + 0.05 * node1.speed[1] * Math.abs(angle[0]);
-            node1.clipping = true
+            node1.clipping = true;
         } else {
-            node1.loc[0] += (node1.offsetWidth / 2 + node2.offsetWidth / 2 - dist) * angle[0]
-            node1.loc[1] += (node1.offsetHeight / 2 + node2.offsetHeight / 2 - dist) * angle[1]
-            node1.clipping = false
+            node1.loc[0] += (node1.offsetWidth / 2 + node2.offsetWidth / 2 - dist) * angle[0];
+            node1.loc[1] += (node1.offsetHeight / 2 + node2.offsetHeight / 2 - dist) * angle[1];
+            node1.clipping = false;
         }
     } else {
-        node1.clipping = false
+        node1.clipping = false;
+        node1.grounded = false;
     }
 }
 let fixeds = []
@@ -59,8 +62,9 @@ let fixed = null
 for (i = 0; i < 10; i++) {
     fixeds[i] = document.createElement("section")
     body.appendChild(fixeds[i])
-    fixeds[i].style = "background-color: #0F0; width: 50vh; height: 50vh; border: #844 solid 10pt; position: absolute; border-radius: 100%;"
-    fixeds[i].weight = 10
+    fixeds[i].weight = 1 + Math.random() * 10;
+    fixeds[i].diameter = 10 + Math.random() * 50
+    fixeds[i].style = `background-color: rgb(${fixeds[i].weight * fixeds[i].diameter / 3}, ${255 - fixeds[i].weight * 25}, ${fixeds[i].weight + fixeds[i].diameter}); width: ${fixeds[i].diameter}vh; height: ${fixeds[i].diameter}vh; border: #844 solid ${fixeds[i].diameter / 5}pt; position: absolute; border-radius: 100%;`
     fixeds[i].speed = [0, 0]
     fixeds[i].loc = [offsetRNG(5000), offsetRNG(5000)]
     move(fixeds[i], 0, 0)
@@ -91,7 +95,7 @@ setInterval(() => {
     angle = getAngle(moving, fixed);
     if (!moving.clipping){
         dist = getDist(moving, fixed);
-        move(moving, 500 / dist**2 * angle[0], 500 / dist**2 * angle[1])
+        move(moving, fixed.weight * fixed.diameter ** 2 * angle[0] / 20 / dist ** 2, fixed.weight * fixed.diameter ** 2 * angle[1] / 20 / dist ** 2)
     }
     if (!controlMode) {
         if (keys["ArrowLeft"]) {
@@ -130,7 +134,9 @@ setInterval(() => {
         moving.speed[1] += 0.02 * direction[1] / norm;
     }
     render(keys["Control"] ? fixed : moving)
-    moving.style.background = controlMode ? "radial-gradient(#000, #FFF)" : `linear-gradient(${Math.atan2(getCenter(fixed)[1] - getCenter(moving)[1], getCenter(fixed)[0] - getCenter(moving)[0]) - Math.PI / 2}rad, #FFF, #000)`
+    mCenter = getCenter(moving);
+    fCenter = getCenter(fixed);
+    moving.style.background = controlMode ? "radial-gradient(#000, #FFF)" : `linear-gradient(${Math.atan2(fCenter[1] - mCenter[1], fCenter[0] - mCenter[0]) - Math.PI / 2}rad, #FFF, #000)`
 }, 0)
 window.onkeydown = (e) => {
     keys[e.key] = true
@@ -138,4 +144,8 @@ window.onkeydown = (e) => {
 window.onkeyup = (e) => {
     keys[e.key] = false
     if (e.key == "Shift") controlMode = !controlMode
+    if (e.key == " " && moving.grounded){
+        moving.loc[0] -= angle[0] * 15;
+        moving.loc[1] -= angle[1] * 15;
+    }
 }
