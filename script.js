@@ -4,10 +4,11 @@ moving.clipping = false;
 moving.grounded = false;
 moving.loc = [0, 0];
 moving.speed = [0, 0];
+moving.radius = moving.offsetHeight / 2;
 let controlMode = false;
 everyOther = true;
 function getCenter(obj) {
-    return [obj.loc[0] + obj.offsetWidth / 2, obj.loc[1] + obj.offsetHeight / 2]
+    return [obj.loc[0] + obj.radius, obj.loc[1] + obj.radius]
 }
 function getVector(node1, node2) {
     center1 = getCenter(node1);
@@ -40,7 +41,7 @@ function refresh(obj) {
 function collide(node1, node2, bounce) {
     dist = getDist(node1, node2);
     angle = getAngle(node2, node1);
-    if (dist < node1.offsetWidth / 2 + node2.offsetWidth / 2) {
+    if (dist < node1.radius + node2.radius) {
         node1.grounded = true;
         if (!node1.clipping) {
             dotP = node1.speed[0] * angle[0] + node1.speed[1] * angle[1];
@@ -48,8 +49,8 @@ function collide(node1, node2, bounce) {
             node1.speed[1] -= 2 * dotP * angle[1] * bounce + 0.05 * node1.speed[1] * Math.abs(angle[0]);
             node1.clipping = true;
         } else {
-            node1.loc[0] += (node1.offsetWidth / 2 + node2.offsetWidth / 2 - dist) * angle[0];
-            node1.loc[1] += (node1.offsetHeight / 2 + node2.offsetHeight / 2 - dist) * angle[1];
+            node1.loc[0] += (node1.radius + node2.radius - dist) * angle[0];
+            node1.loc[1] += (node1.radius + node2.radius - dist) * angle[1];
             node1.clipping = false;
         }
     } else {
@@ -57,22 +58,23 @@ function collide(node1, node2, bounce) {
         node1.grounded = false;
     }
 }
-let fixeds = []
-let fixed = null
+let fixeds = [];
+let fixed = null;
 for (i = 0; i < 10; i++) {
-    fixeds[i] = document.createElement("section")
-    body.appendChild(fixeds[i])
+    fixeds[i] = document.createElement("section");
+    body.appendChild(fixeds[i]);
     fixeds[i].weight = 1 + Math.random() * 10;
-    fixeds[i].diameter = 10 + Math.random() * 50
+    fixeds[i].diameter = 10 + Math.random() * 200;
     fixeds[i].style = `background-color: rgb(${fixeds[i].weight * fixeds[i].diameter / 3}, ${255 - fixeds[i].weight * 25}, ${fixeds[i].weight + fixeds[i].diameter}); width: ${fixeds[i].diameter}vh; height: ${fixeds[i].diameter}vh; border: #844 solid ${fixeds[i].diameter / 5}pt; position: absolute; border-radius: 100%;`
-    fixeds[i].speed = [0, 0]
-    fixeds[i].loc = [offsetRNG(5000), offsetRNG(5000)]
-    move(fixeds[i], 0, 0)
+    fixeds[i].radius = fixeds[i].offsetHeight / 2;
+    fixeds[i].speed = [0, 0];
+    fixeds[i].loc = [offsetRNG(10000), offsetRNG(10000)];
+    move(fixeds[i], 0, 0);
 }
 function getClosest(obj) {
-    let num = [0, getDist(obj, fixeds[0])]
+    let num = [0, getDist(obj, fixeds[0]) - fixeds[0].radius]
     for (i = 1; i < fixeds.length; i++) {
-        temp = getDist(obj, fixeds[i])
+        temp = getDist(obj, fixeds[i]) - fixeds[i].radius;
         num = [num[1] > temp ? i : num[0], num[1] > temp ? temp : num[1]]
     }
     return num[0]
@@ -93,9 +95,13 @@ setInterval(() => {
     everyOther = !everyOther;
     collide(moving, fixed, 0.6)
     angle = getAngle(moving, fixed);
-    if (!moving.clipping){
-        dist = getDist(moving, fixed);
-        move(moving, fixed.weight * fixed.diameter ** 2 * angle[0] / 20 / dist ** 2, fixed.weight * fixed.diameter ** 2 * angle[1] / 20 / dist ** 2)
+    if (!moving.clipping && !everyOther){
+        for(i in fixeds){
+            anglle = getAngle(moving, fixeds[i]);
+            dist = getDist(moving, fixeds[i]);
+            coef = fixeds[i].weight * fixeds[i].radius ** 2 / 150 / dist ** 2
+            move(moving, coef * anglle[0], coef * anglle[1])
+        }
     }
     if (!controlMode) {
         if (keys["ArrowLeft"]) {
@@ -107,8 +113,8 @@ setInterval(() => {
             moving.speed[1] -= angle[0] * 0.01
         }
         if (keys["ArrowUp"]) {
-            moving.speed[0] -= angle[0] * 0.02
-            moving.speed[1] -= angle[1] * 0.02
+            moving.speed[0] -= angle[0] * (moving.grounded ? 0.1 : 0.02);
+            moving.speed[1] -= angle[1] * (moving.grounded ? 0.1 : 0.02);
         }
         if (keys["ArrowDown"]) {
             moving.speed[0] += angle[0] * 0.05
@@ -130,8 +136,8 @@ setInterval(() => {
         }
         norm = Math.sqrt(direction[0] ** 2 + direction[1] ** 2);
         if(norm == 0) norm = 1;
-        moving.speed[0] += 0.02 * direction[0] / norm;
-        moving.speed[1] += 0.02 * direction[1] / norm;
+        moving.speed[0] += 0.03 * direction[0] / norm;
+        moving.speed[1] += 0.03 * direction[1] / norm;
     }
     render(keys["Control"] ? fixed : moving)
     mCenter = getCenter(moving);
@@ -139,13 +145,9 @@ setInterval(() => {
     moving.style.background = controlMode ? "radial-gradient(#000, #FFF)" : `linear-gradient(${Math.atan2(fCenter[1] - mCenter[1], fCenter[0] - mCenter[0]) - Math.PI / 2}rad, #FFF, #000)`
 }, 0)
 window.onkeydown = (e) => {
-    keys[e.key] = true
+    keys[e.key] = true;
 }
 window.onkeyup = (e) => {
-    keys[e.key] = false
-    if (e.key == "Shift") controlMode = !controlMode
-    if (e.key == " " && moving.grounded){
-        moving.loc[0] -= angle[0] * 15;
-        moving.loc[1] -= angle[1] * 15;
-    }
+    keys[e.key] = false;
+    if (e.key == "Shift") controlMode = !controlMode;
 }
