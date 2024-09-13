@@ -1,106 +1,121 @@
 const body = document.querySelector("body");
 const keys = {};
-moving.clipping = false;
-moving.grounded = false;
-moving.loc = [0, 0];
-moving.speed = [0, 0];
-moving.radius = moving.offsetHeight / 2;
 let controlMode = false;
-everyOther = true;
-function getCenter(obj) {
-    return [obj.loc[0] + obj.radius, obj.loc[1] + obj.radius]
-}
-function getVector(node1, node2) {
-    center1 = getCenter(node1);
-    center2 = getCenter(node2);
-    return [center2[0] - center1[0], center2[1] - center1[1]];
-}
-function getDist(node1, node2) {
-    vector = getVector(node1, node2);
-    return Math.sqrt(vector[0] ** 2 + vector[1] ** 2)
-}
-function getAngle(source, target) {
-    mag = getDist(source, target);
-    if(mag == 0) mag = 1;
-    vector = getVector(source, target)
-    return [vector[0] / mag, vector[1] / mag];
-}
+let everyOther = true;
+class Ball{
+    constructor(){
+        this.speed = [0, 0];
+        this.loc = [offsetRNG(10000), offsetRNG(10000)];
+    }
+    getCenter(){
+        return [this.loc[0] + this.radius, this.loc[1] + this.radius]
+    }
+    getVector(target){
+        let center = this.getCenter();
+        let centerEnd = target.getCenter();
+        return [centerEnd[0] - center[0], centerEnd[1] - center[1]];
+    }
+    getDist(target){
+        let vector = this.getVector(target);
+        return Math.sqrt(vector[0] ** 2 + vector[1] ** 2)
+    }
+    getAngle(target){
+        let mag = this.getDist(target);
+        if(mag == 0) mag = 1;
+        let vector = this.getVector(target)
+        return [vector[0] / mag, vector[1] / mag];
+    }
+};
+class Fixed extends Ball{
+    constructor(element){
+        super();
+        this.element = element;
+        let diameter = 10 + Math.random() * 200;
+        this.weight = 1 + Math.random() * 10;
+        this.element.style = `background-color: rgb(${this.weight * diameter / 3}, ${255 - this.weight * 25}, ${this.weight + diameter}); width: ${diameter}vh; height: ${diameter}vh; border: #844 solid ${diameter / 5}pt; position: absolute; border-radius: 100%;`
+        body.appendChild(this.element);
+        this.radius = this.element.offsetHeight / 2;
+    }
+};
+class Moving extends Ball{
+    constructor(){
+        super();
+        this.element = movingElement;
+        this.clipping = false;
+        this.grounded = false;
+        this.radius = this.element.offsetHeight / 2; 
+    }
+    move(x, y) {
+        this.speed[0] += x
+        this.speed[1] += y
+        this.loc[0] += this.speed[0]
+        this.loc[1] += this.speed[1]
+    }
+    collide(target) {
+        let dist = this.getDist(target);
+        let angle = target.getAngle(this);
+        if (dist < this.radius + target.radius) {
+            this.grounded = true;
+            if (!this.clipping) {
+                let dotP = this.speed[0] * angle[0] + this.speed[1] * angle[1];
+                this.speed[0] -= 2 * dotP * angle[0] * 0.6 + 0.05 * this.speed[0] * Math.abs(angle[1]);
+                this.speed[1] -= 2 * dotP * angle[1] * 0.6 + 0.05 * this.speed[1] * Math.abs(angle[0]);
+                this.clipping = true;
+            } else {
+                this.loc[0] += (this.radius + target.radius - dist) * angle[0];
+                this.loc[1] += (this.radius + target.radius - dist) * angle[1];
+                this.clipping = false;
+            }
+        } else {
+            this.clipping = false;
+            this.grounded = false;
+        }
+    }
+    getClosest() {
+        let num = [0, this.getDist(fixeds[0]) - fixeds[0].radius]
+        for (i = 1; i < fixeds.length; i++) {
+            let temp = this.getDist(fixeds[i]) - fixeds[i].radius;
+            num = [num[1] > temp ? i : num[0], num[1] > temp ? temp : num[1]]
+        }
+        return num[0]
+    }
+};
+const moving = new Moving;
 function offsetRNG(limits) {
     return Math.random() * (limits * 2 + 1) - limits
 }
-function move(obj, x, y) {
-    obj.speed[0] += x
-    obj.speed[1] += y
-    obj.loc[0] += obj.speed[0]
-    obj.loc[1] += obj.speed[1]
-}
 function refresh(obj) {
-    obj.style.left = obj.loc[0] + "px"
-    obj.style.top = obj.loc[1] + "px"
-}
-function collide(node1, node2, bounce) {
-    dist = getDist(node1, node2);
-    angle = getAngle(node2, node1);
-    if (dist < node1.radius + node2.radius) {
-        node1.grounded = true;
-        if (!node1.clipping) {
-            dotP = node1.speed[0] * angle[0] + node1.speed[1] * angle[1];
-            node1.speed[0] -= 2 * dotP * angle[0] * bounce + 0.05 * node1.speed[0] * Math.abs(angle[1]);
-            node1.speed[1] -= 2 * dotP * angle[1] * bounce + 0.05 * node1.speed[1] * Math.abs(angle[0]);
-            node1.clipping = true;
-        } else {
-            node1.loc[0] += (node1.radius + node2.radius - dist) * angle[0];
-            node1.loc[1] += (node1.radius + node2.radius - dist) * angle[1];
-            node1.clipping = false;
-        }
-    } else {
-        node1.clipping = false;
-        node1.grounded = false;
-    }
+    obj.element.style.left = obj.loc[0] + "px"
+    obj.element.style.top = obj.loc[1] + "px"
 }
 let fixeds = [];
 let fixed = null;
 for (i = 0; i < 10; i++) {
-    fixeds[i] = document.createElement("section");
-    body.appendChild(fixeds[i]);
-    fixeds[i].weight = 1 + Math.random() * 10;
-    fixeds[i].diameter = 10 + Math.random() * 200;
-    fixeds[i].style = `background-color: rgb(${fixeds[i].weight * fixeds[i].diameter / 3}, ${255 - fixeds[i].weight * 25}, ${fixeds[i].weight + fixeds[i].diameter}); width: ${fixeds[i].diameter}vh; height: ${fixeds[i].diameter}vh; border: #844 solid ${fixeds[i].diameter / 5}pt; position: absolute; border-radius: 100%;`
-    fixeds[i].radius = fixeds[i].offsetHeight / 2;
-    fixeds[i].speed = [0, 0];
-    fixeds[i].loc = [offsetRNG(10000), offsetRNG(10000)];
-    move(fixeds[i], 0, 0);
-}
-function getClosest(obj) {
-    let num = [0, getDist(obj, fixeds[0]) - fixeds[0].radius]
-    for (i = 1; i < fixeds.length; i++) {
-        temp = getDist(obj, fixeds[i]) - fixeds[i].radius;
-        num = [num[1] > temp ? i : num[0], num[1] > temp ? temp : num[1]]
-    }
-    return num[0]
+    fixeds[i] = new Fixed(document.createElement("section"));
 }
 function render(focusObj) {
-    focusCenter = getCenter(focusObj);
-    camOffset = [focusCenter[0] - window.innerWidth / 2, focusCenter[1] - window.innerHeight / 2]
-    for (c in body.childNodes) {
-        try {
-            body.childNodes[c].loc[0] -= camOffset[0]
-            body.childNodes[c].loc[1] -= camOffset[1]
-            refresh(body.childNodes[c])
-        } catch { }
+    let focusCenter = focusObj.getCenter();
+    let camOffset = [focusCenter[0] - window.innerWidth / 2, focusCenter[1] - window.innerHeight / 2];
+    moving.loc[0] -= camOffset[0];
+    moving.loc[1] -= camOffset[1];
+    refresh(moving);
+    for (i in fixeds) {
+        fixeds[i].loc[0] -= camOffset[0];
+        fixeds[i].loc[1] -= camOffset[1];
+        refresh(fixeds[i]);
     }
 }
 setInterval(() => {
-    if (everyOther) fixed = fixeds[getClosest(moving)]
+    if (everyOther) fixed = fixeds[moving.getClosest()];
     everyOther = !everyOther;
-    collide(moving, fixed, 0.6)
-    angle = getAngle(moving, fixed);
+    moving.collide(fixed)
+    let angle = moving.getAngle(fixed);
     if (!moving.clipping && !everyOther){
         for(i in fixeds){
-            anglle = getAngle(moving, fixeds[i]);
-            dist = getDist(moving, fixeds[i]);
-            coef = fixeds[i].weight * fixeds[i].radius ** 2 / 150 / dist ** 2
-            move(moving, coef * anglle[0], coef * anglle[1])
+            let anglle = moving.getAngle(fixeds[i]);
+            let dist = moving.getDist(fixeds[i]);
+            let coef = fixeds[i].weight * fixeds[i].radius ** 2 / 100 / dist ** 2
+            moving.move(coef * anglle[0], coef * anglle[1])
         }
     }
     if (!controlMode) {
@@ -117,11 +132,11 @@ setInterval(() => {
             moving.speed[1] -= angle[1] * (moving.grounded ? 0.1 : 0.02);
         }
         if (keys["ArrowDown"]) {
-            moving.speed[0] += angle[0] * 0.05
-            moving.speed[1] += angle[1] * 0.05
+            moving.speed[0] += angle[0] * 0.01
+            moving.speed[1] += angle[1] * 0.01
         }
     } else {
-        direction = [0, 0];
+        let direction = [0, 0];
         if (keys["ArrowLeft"]) {
             direction[0] -= 1;
         }
@@ -134,15 +149,15 @@ setInterval(() => {
         if (keys["ArrowDown"]) {
             direction[1] += 1;
         }
-        norm = Math.sqrt(direction[0] ** 2 + direction[1] ** 2);
+        let norm = Math.sqrt(direction[0] ** 2 + direction[1] ** 2);
         if(norm == 0) norm = 1;
         moving.speed[0] += 0.03 * direction[0] / norm;
         moving.speed[1] += 0.03 * direction[1] / norm;
     }
     render(keys["Control"] ? fixed : moving)
-    mCenter = getCenter(moving);
-    fCenter = getCenter(fixed);
-    moving.style.background = controlMode ? "radial-gradient(#000, #FFF)" : `linear-gradient(${Math.atan2(fCenter[1] - mCenter[1], fCenter[0] - mCenter[0]) - Math.PI / 2}rad, #FFF, #000)`
+    let mCenter = moving.getCenter();
+    let fCenter = fixed.getCenter();
+    moving.element.style.background = controlMode ? "radial-gradient(#000, #FFF)" : `linear-gradient(${Math.atan2(fCenter[1] - mCenter[1], fCenter[0] - mCenter[0]) - Math.PI / 2}rad, #FFF, #000)`
 }, 0)
 window.onkeydown = (e) => {
     keys[e.key] = true;
