@@ -39,19 +39,24 @@ class Moon extends Ball{
         let diameter = 5 + Math.random() * 100;
         this.weight = 1 + Math.random() * 10;
         this.element.style = `background-color: rgb(${this.weight * diameter / 3}, ${255 - this.weight * 25}, ${this.weight + diameter}); width: ${diameter}vh; height: ${diameter}vh; border: #844 solid ${diameter / 5}pt; position: absolute; border-radius: 100%;`;
+        if(Math.random() < 0.05){
+            this.weight *= -1;
+            this.element.style.background = `radial-gradient(#FFF, rgb(${this.weight * diameter / 3}, ${255 - this.weight * 25}, ${this.weight + diameter}))`;
+            this.element.style.borderColor = "#FFF"
+        }
         body.appendChild(this.element);
         this.radius = this.element.offsetHeight / 2;
         this.angularSpeed = Math.random() / 500;
-        this.deltaTime = Math.random() * Math.PI * 2;
+        this.deltaTime = 0//Math.random() * Math.PI * 2;
         this.anchorDist = (anchor.radius + this.radius) * (Math.random() + 1);
         let anchorCenter = anchor.getCenter();
-        this.loc = [anchorCenter[0] + this.anchorDist * Math.cos(this.deltaTime), anchorCenter[1] + this.anchorDist * Math.sin(this.deltaTime)];
+        this.loc = [anchorCenter[0] - this.radius - this.anchorDist * Math.cos(this.deltaTime), anchorCenter[1] - this.radius + this.anchorDist * Math.sin(this.deltaTime)];
     }
     move(){
         this.deltaTime += this.angularSpeed;
         this.speed = [
-            this.anchorDist * -Math.sin(this.deltaTime) * this.angularSpeed,
-            this.anchorDist * Math.cos(this.deltaTime) * this.angularSpeed
+            this.anchorDist * Math.sin(this.deltaTime) * this.angularSpeed,
+            this.anchorDist * -Math.cos(this.deltaTime) * this.angularSpeed
         ];
         this.loc[0] += this.speed[0];
         this.loc[1] += this.speed[1];
@@ -111,11 +116,14 @@ class Moving extends Ball{
     getClosest(){
         let close = [null, Infinity];
         for (i in fixeds) {
-            let temp = this.getDist(fixeds[i]) - fixeds[i].radius;
-            close = close[1] > temp ? [fixeds[i], temp] : close;
-        }
-        if(close[0].moonSlot != null){
-            return close[1] > this.getDist(close[0].moonSlot) - close[0].moonSlot.radius ? close[0].moonSlot : close[0];
+            let inCheck = fixeds[i];
+            let temp = this.getDist(inCheck) - inCheck.radius;
+            close = close[1] > temp ? [inCheck, temp] : close;
+            if(inCheck.moonSlot != null){
+                inCheck = inCheck.moonSlot;
+                temp = this.getDist(inCheck) - inCheck.radius;
+                close = close[1] > temp ? [inCheck, temp] : close;
+            }
         }
         return close[0];
     }
