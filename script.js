@@ -29,11 +29,9 @@ class Ball{
         let vector = this.getVector(target);
         return [vector[0] / mag, vector[1] / mag];
     }
-    render(target){
-        let focusCenter = target.getCenter();
-        let camOffset = [focusCenter[0] - window.innerWidth / 2, focusCenter[1] - window.innerHeight / 2];
-        this.loc[0] -= camOffset[0];
-        this.loc[1] -= camOffset[1];
+    render(offset){
+        this.loc[0] -= offset[0];
+        this.loc[1] -= offset[1];
         this.element.style.left = this.loc[0] + "px";
         this.element.style.top = this.loc[1] + "px";
     }
@@ -52,9 +50,9 @@ class Moon extends Ball{
         }
         body.appendChild(this.element);
         this.radius = this.element.offsetHeight / 2;
-        this.angularSpeed = Math.random() / 500 * (Math.random() > 0.5 ? 1 : -1);
-        this.deltaTime = Math.PI / 2//Math.random() * Math.PI * 2;
         this.anchorDist = (anchor.radius + this.radius) * (Math.random() + 1);
+        this.angularSpeed = Math.sqrt(this.anchor.weight / 100 / this.anchorDist ** 2) * Math.PI * (Math.random() > 0.5 ? 2 : -2);
+        this.deltaTime = Math.random() * Math.PI * 2;
         if(Math.random() < 0.2){
             this.anchorDist *= 10;
         }
@@ -82,7 +80,7 @@ class Fixed extends Ball{
         this.element.style = `background-color: rgb(${this.weight * diameter / 3}, ${255 - this.weight * 25}, ${this.weight + diameter}); width: ${diameter}vh; height: ${diameter}vh; border: #844 solid ${diameter / 5}pt; position: absolute; border-radius: 100%;`;
         body.appendChild(this.element);
         this.radius = this.element.offsetHeight / 2;
-        if(Math.random() < 1){
+        if(Math.random() < 0.6){
             this.moonSlot = new Moon(document.createElement("section"), this);
         } else {
             this.moonSlot = null;
@@ -93,6 +91,7 @@ class Fixed extends Ball{
 class Moving extends Ball{
     constructor(){
         super(movingElement);
+        this.weight = 1;
         this.clipping = false;
         this.grounded = false;
         this.radius = this.element.offsetHeight / 2; 
@@ -205,10 +204,11 @@ function mainLoop(){
         if(norm == 0) norm = 1;
         moving.accelerate(0.03 * direction[0] / norm, 0.03 * direction[1] / norm);
     }
-    let focusObj = keys["Control"] ? closest : moving;
+    let focusCenter = (keys["Control"] ? closest : moving).getCenter();
+    let camOffset = [focusCenter[0] - window.innerWidth / 2, focusCenter[1] - window.innerHeight / 2];
     for(i in objects){
-        objects[i].render(focusObj);
         objects[i].tick();
+        objects[i].render(camOffset);
     }
     let mCenter = moving.getCenter();
     let fCenter = closest.getCenter();
