@@ -1,9 +1,10 @@
 const body = document.querySelector("body");
 const keys = {};
+const G = 0.01;
 let objects = [];
 let controlMode = false;
 let everyOther = true;
-let planetNum = 10;
+let planetNum = 1;
 
 function sumProd(x, y, z){
     return (x + y) * z;
@@ -13,7 +14,7 @@ class Ball {
     constructor(element) {
         this.element = element
         this.speed = [0, 0];
-        this.loc = [offsetRNG(10000), offsetRNG(10000)];
+        this.loc = [offsetRNG(15000), offsetRNG(15000)];
         objects.push(this);
     }
     getCenter() {
@@ -46,23 +47,23 @@ class Moon extends Ball {
         super(element);
         this.anchor = anchor;
         let diameter = 5 + Math.random() * 100;
-        this.weight = 1 + Math.random() * 10;
-        this.element.style = `background-color: rgb(${this.weight * diameter / 3}, ${255 - this.weight * 25}, ${this.weight + diameter}); width: ${diameter}vh; height: ${diameter}vh; border: #844 solid ${diameter / 5}pt; position: absolute; border-radius: 100%;`;
+        this.mass = 1 + Math.random() * 10;
+        this.element.style = `background-color: rgb(${this.mass * diameter / 3}, ${255 - this.mass * 25}, ${this.mass + diameter}); width: ${diameter}vh; height: ${diameter}vh; border: #844 solid ${diameter / 5}pt; position: absolute; border-radius: 100%;`;
         if (Math.random() < 0.05) {
-            this.weight *= -1;
-            this.element.style.background = `radial-gradient(#FFF, rgb(${this.weight * diameter / 3}, ${255 - this.weight * 25}, ${this.weight + diameter}))`;
+            this.mass *= -1;
+            this.element.style.background = `radial-gradient(#FFF, rgb(${this.mass * diameter / 3}, ${255 - this.mass * 25}, ${this.mass + diameter}))`;
             this.element.style.borderColor = "#FFF"
         }
         body.appendChild(this.element);
         this.radius = this.element.offsetHeight / 2;
         this.anchorDist = (anchor.radius + this.radius) * (Math.random() + 1);
-        this.angularSpeed = Math.sqrt(this.anchor.weight / 100 / this.anchorDist ** 2) * Math.PI * (Math.random() > 0.5 ? 2 : -2);
         this.deltaTime = Math.random() * Math.PI * 2;
         if (Math.random() < 0.2) {
             this.anchorDist *= 10;
         }
         let anchorCenter = anchor.getCenter();
         this.loc = [anchorCenter[0] - this.radius - this.anchorDist * Math.cos(this.deltaTime), anchorCenter[1] - this.radius - this.anchorDist * Math.sin(this.deltaTime)];
+        this.angularSpeed = Math.sqrt(this.anchor.mass * this.anchor.radius ** 2 * G / this.getDist(this.anchor) / (Math.random() < 0.5 ? 2 : -2)) / this.getDist(this.anchor);
     }
     move() {
         this.deltaTime += this.angularSpeed;
@@ -81,18 +82,22 @@ class Fixed extends Ball {
     constructor(element) {
         super(element);
         let diameter = 100 + Math.random() * 200;
-        this.weight = 1 + Math.random() * 10;
-        this.element.style = `background-color: rgb(${this.weight * diameter / 3}, ${255 - this.weight * 25}, ${this.weight + diameter}); width: ${diameter}vh; height: ${diameter}vh; border: #844 solid ${diameter / 5}pt; position: absolute; border-radius: 100%;`;
+        this.mass = 1 + Math.random() * 10;
+        this.element.style = `background-color: rgb(${this.mass * diameter / 3}, ${255 - this.mass * 25}, ${this.mass + diameter}); width: ${diameter}vh; height: ${diameter}vh; border: #844 solid ${diameter / 5}pt; position: absolute; border-radius: 100%;`;
         body.appendChild(this.element);
         this.radius = this.element.offsetHeight / 2;
         for (i in objects) {
             let other = objects[i];
             if (!(objects[i] instanceof Fixed)) continue;
             let checkDist = this.getDist(other);
-            if (checkDist / 2 < this.radius + other.radius + (other.moonSlot ? other.moonSlot.radius + other.moonSlot.anchorDist : 0)) {
+            if (checkDist / 2 < this.radius + (this.moonSlot ? this.moonSlot.radius + this.moonSlot.anchorDist : 0) + other.radius + (other.moonSlot ? other.moonSlot.radius + other.moonSlot.anchorDist : 0)) {
                 let checkAngle = this.getAngle(other);
                 this.loc[0] += (this.radius + other.radius) * 2 * checkAngle[0];
                 this.loc[1] += (this.radius + other.radius) * 2 * checkAngle[1];
+                if(this.moonSlot){
+                    anchorCenter = this.getCenter();
+                    this.moonSlot.loc = [anchorCenter[0] - this.moonSlot.radius - this.moonSlot.anchorDist * Math.cos(this.moonSlot.deltaTime), anchorCenter[1] - this.moonSlot.radius - this.moonSlot.anchorDist * Math.sin(this.moonSlot.deltaTime)];
+                }
             }
         }
         if (Math.random() < 0.6) {
@@ -106,7 +111,7 @@ class Fixed extends Ball {
 class Moving extends Ball {
     constructor() {
         super(movingElement);
-        this.weight = 1;
+        this.mass = 1;
         this.clipping = false;
         this.grounded = false;
         this.radius = this.element.offsetHeight / 2;
@@ -180,7 +185,7 @@ function mainLoop() {
             let inCheck = objects[i];
             let anglle = moving.getAngle(inCheck);
             let dist = moving.getDist(inCheck);
-            let coef = inCheck.weight * inCheck.radius ** 2 / 100 / dist ** 2;
+            let coef = inCheck.mass * inCheck.radius ** 2 * G / dist ** 2;
             moving.accelerate(coef * anglle[0], coef * anglle[1]);
         }
     }
