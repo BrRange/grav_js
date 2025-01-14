@@ -4,10 +4,34 @@ const G = 0.01;
 let objects = [];
 let controlMode = false;
 let everyOther = true;
-let planetNum = 1;
+
+const defines = {
+    planetNum: 10,
+    fixedMinSize: 100,
+    fixedMaxSize: 300,
+    moonMinSize: 5,
+    moonMaxSize: 105,
+    ballMinDens: 1,
+    ballMaxDens: 12,
+    farOrbitMult: 10,
+    baseFriction: 0.5,
+    bounceDamp: 15
+};
+
+const chances = {
+    haveMoon: 0.6,
+    antiMoon: 0.05,
+    antiFixed: 0.02,
+    moonCounterClock: 0.5,
+    farOrbit: 0.2,
+};
 
 function sumProd(x, y, z){
     return (x + y) * z;
+}
+
+function compileMinMax(min, max){
+    return min + sumProd(max, -min, Math.random());
 }
 
 class Ball {
@@ -15,6 +39,9 @@ class Ball {
         this.element = element
         this.speed = [0, 0];
         this.loc = [offsetRNG(15000), offsetRNG(15000)];
+        this.density = compileMinMax(defines.ballMinDens, defines.ballMaxDens);
+        this.friction = defines.baseFriction / this.density;
+        this.bounciness = this.density / defines.bounceDamp;
         objects.push(this);
     }
     getCenter() {
@@ -46,24 +73,24 @@ class Moon extends Ball {
     constructor(element, anchor) {
         super(element);
         this.anchor = anchor;
-        let diameter = 5 + Math.random() * 100;
-        this.mass = 1 + Math.random() * 10;
-        this.element.style = `background-color: rgb(${this.mass * diameter / 3}, ${255 - this.mass * 25}, ${this.mass + diameter}); width: ${diameter}vh; height: ${diameter}vh; border: #844 solid ${diameter / 5}pt; position: absolute; border-radius: 100%;`;
-        if (Math.random() < 0.05) {
-            this.mass *= -1;
-            this.element.style.background = `radial-gradient(#FFF, rgb(${this.mass * diameter / 3}, ${255 - this.mass * 25}, ${this.mass + diameter}))`;
+        let diameter = compileMinMax(defines.moonMinSize, defines.moonMaxSize);
+        this.element.style = `background-color: rgb(${this.density * diameter / 3}, ${255 - this.density * 25}, ${this.density + diameter}); width: ${diameter}vh; height: ${diameter}vh; border: #844 solid ${diameter / 5}pt; position: absolute; border-radius: 100%;`;
+        if (Math.random() < chances.antiMoon) {
+            this.density *= -1;
+            this.element.style.background = `radial-gradient(#FFF, rgb(${this.density * diameter / 3}, ${255 - this.density * 25}, ${this.density + diameter}))`;
             this.element.style.borderColor = "#FFF"
         }
         body.appendChild(this.element);
         this.radius = this.element.offsetHeight / 2;
+        this.mass = this.density * this.radius * this.radius;
         this.anchorDist = (anchor.radius + this.radius) * (Math.random() + 1);
         this.deltaTime = Math.random() * Math.PI * 2;
-        if (Math.random() < 0.2) {
-            this.anchorDist *= 10;
+        if (Math.random() < chances.farOrbit) {
+            this.anchorDist *= defines.farOrbitMult;
         }
         let anchorCenter = anchor.getCenter();
         this.loc = [anchorCenter[0] - this.radius - this.anchorDist * Math.cos(this.deltaTime), anchorCenter[1] - this.radius - this.anchorDist * Math.sin(this.deltaTime)];
-        this.angularSpeed = Math.sqrt(this.anchor.mass * this.anchor.radius ** 2 * G / this.getDist(this.anchor) / (Math.random() < 0.5 ? 2 : -2)) / this.getDist(this.anchor);
+        this.angularSpeed = Math.sqrt(this.anchor.mass * G / this.getDist(this.anchor) / 2) / this.getDist(this.anchor) * (Math.random() < chances.moonCounterClock ? 1 : -1);
     }
     move() {
         this.deltaTime += this.angularSpeed;
@@ -81,11 +108,16 @@ class Moon extends Ball {
 class Fixed extends Ball {
     constructor(element) {
         super(element);
-        let diameter = 100 + Math.random() * 200;
-        this.mass = 1 + Math.random() * 10;
-        this.element.style = `background-color: rgb(${this.mass * diameter / 3}, ${255 - this.mass * 25}, ${this.mass + diameter}); width: ${diameter}vh; height: ${diameter}vh; border: #844 solid ${diameter / 5}pt; position: absolute; border-radius: 100%;`;
+        let diameter = compileMinMax(defines.fixedMinSize, defines.fixedMaxSize);
+        this.element.style = `background-color: rgb(${this.density * diameter / 3}, ${255 - this.density * 25}, ${this.density + diameter}); width: ${diameter}vh; height: ${diameter}vh; border: #844 solid ${diameter / 5}pt; position: absolute; border-radius: 100%;`;
+        if (Math.random() < chances.antiFixed) {
+            this.density *= -1;
+            this.element.style.background = `radial-gradient(#FFF, rgb(${this.density * diameter / 3}, ${255 - this.density * 25}, ${this.density + diameter}))`;
+            this.element.style.borderColor = "#FFF"
+        }
         body.appendChild(this.element);
         this.radius = this.element.offsetHeight / 2;
+        this.mass = this.density * this.radius * this.radius;
         for (i in objects) {
             let other = objects[i];
             if (!(objects[i] instanceof Fixed)) continue;
@@ -94,13 +126,9 @@ class Fixed extends Ball {
                 let checkAngle = this.getAngle(other);
                 this.loc[0] += (this.radius + other.radius) * 2 * checkAngle[0];
                 this.loc[1] += (this.radius + other.radius) * 2 * checkAngle[1];
-                if(this.moonSlot){
-                    anchorCenter = this.getCenter();
-                    this.moonSlot.loc = [anchorCenter[0] - this.moonSlot.radius - this.moonSlot.anchorDist * Math.cos(this.moonSlot.deltaTime), anchorCenter[1] - this.moonSlot.radius - this.moonSlot.anchorDist * Math.sin(this.moonSlot.deltaTime)];
-                }
             }
         }
-        if (Math.random() < 0.6) {
+        if (Math.random() < chances.haveMoon) {
             this.moonSlot = new Moon(document.createElement("section"), this);
         } else {
             this.moonSlot = null;
@@ -109,9 +137,11 @@ class Fixed extends Ball {
     tick() { }
 };
 class Moving extends Ball {
-    constructor() {
-        super(movingElement);
-        this.mass = 1;
+    constructor(element) {
+        super(element);
+        this.density = 1;
+        this.bounciness = 0.1;
+        this.friction = 0.1;
         this.clipping = false;
         this.grounded = false;
         this.radius = this.element.offsetHeight / 2;
@@ -132,8 +162,8 @@ class Moving extends Ball {
             if (!this.clipping) {
                 let relSpeed = [this.speed[0] - target.speed[0], this.speed[1] - target.speed[1]];
                 let dotP = relSpeed[0] * angle[0] + relSpeed[1] * angle[1];
-                this.speed[0] -= 2 * dotP * angle[0] * 0.6 + 0.05 * relSpeed[0] * Math.abs(angle[1]);
-                this.speed[1] -= 2 * dotP * angle[1] * 0.6 + 0.05 * relSpeed[1] * Math.abs(angle[0]);
+                this.speed[0] -= 2 * dotP * angle[0] * target.bounciness + target.friction * relSpeed[0] * Math.abs(angle[1]);
+                this.speed[1] -= 2 * dotP * angle[1] * target.bounciness + target.friction * relSpeed[1] * Math.abs(angle[0]);
                 this.clipping = true;
             } else {
                 this.loc[0] += sumProd(this.radius, target.radius - dist, angle[0]);
@@ -146,12 +176,12 @@ class Moving extends Ball {
         }
     }
     getClosest() {
-        let close = [null, Infinity];
+        let close = [null, -1];
         for (i in objects) {
             if (objects[i] == this) continue;
             let inCheck = objects[i];
             let temp = this.getDist(inCheck) - inCheck.radius;
-            close = close[1] > temp ? [inCheck, temp] : close;
+            close = close[1] > temp || close[1] < 0 ? [inCheck, temp] : close;
         }
         return close[0];
     }
@@ -166,12 +196,12 @@ class Moving extends Ball {
         moving.loc[1] = obj.loc[1];
     }
 };
-const moving = new Moving;
+const moving = new Moving(movingElement);
 function offsetRNG(limits) {
     return sumProd(1, limits * 2, Math.random()) - limits;
 }
 let closest = null;
-for (i = 0; i < planetNum; i++) {
+for (i = 0; i < defines.planetNum; i++) {
     new Fixed(document.createElement("section"));
 }
 
@@ -185,7 +215,7 @@ function mainLoop() {
             let inCheck = objects[i];
             let anglle = moving.getAngle(inCheck);
             let dist = moving.getDist(inCheck);
-            let coef = inCheck.mass * inCheck.radius ** 2 * G / dist ** 2;
+            let coef = inCheck.mass * G / dist / dist;
             moving.accelerate(coef * anglle[0], coef * anglle[1]);
         }
     }
