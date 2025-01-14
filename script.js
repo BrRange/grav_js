@@ -15,7 +15,7 @@ const defines = {
     ballMaxDens: 12,
     farOrbitMult: 10,
     baseFriction: 0.5,
-    bounceDamp: 15
+    bounciness: 0.8
 };
 
 const chances = {
@@ -41,7 +41,7 @@ class Ball {
         this.loc = [offsetRNG(15000), offsetRNG(15000)];
         this.density = compileMinMax(defines.ballMinDens, defines.ballMaxDens);
         this.friction = defines.baseFriction / this.density;
-        this.bounciness = this.density / defines.bounceDamp;
+        this.bounciness = defines.bounciness * this.density / defines.ballMaxDens;
         objects.push(this);
     }
     getCenter() {
