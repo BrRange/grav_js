@@ -9,13 +9,13 @@ const defines = {
     planetNum: 10,
     fixedMinSize: 100,
     fixedMaxSize: 300,
-    moonMinSize: 5,
-    moonMaxSize: 105,
+    moonMinSize: 10,
+    moonMaxSize: 100,
     ballMinDens: 1,
     ballMaxDens: 12,
     farOrbitMult: 10,
     baseFriction: 0.5,
-    bounciness: 0.8
+    baseBounciness: 0.8
 };
 
 const chances = {
@@ -26,8 +26,22 @@ const chances = {
     farOrbit: 0.2,
 };
 
+function dotProd(a, b){
+    return a[0] * b[0] + a[1] * b[1];
+}
+
 function sumProd(x, y, z){
     return (x + y) * z;
+}
+
+function rayCast(source, target){
+    const lambda = (a, b) => {return [a[0] - b[0], a[1] - b[1]]};
+    const origin = lambda(source.getCenter(), target.getCenter());
+    const direction = source.getAngle(target);
+    const base = dotProd(origin, direction);
+    const root = base * base - dotProd(origin, origin) + target.radius * target.radius;
+    if(root < 0) return -1;
+    return -base - Math.sqrt(root);
 }
 
 function compileMinMax(min, max){
@@ -41,7 +55,7 @@ class Ball {
         this.loc = [offsetRNG(15000), offsetRNG(15000)];
         this.density = compileMinMax(defines.ballMinDens, defines.ballMaxDens);
         this.friction = defines.baseFriction / this.density;
-        this.bounciness = defines.bounciness * this.density / defines.ballMaxDens;
+        this.bounciness = defines.baseBounciness * this.density / defines.ballMaxDens;
         objects.push(this);
     }
     getCenter() {
@@ -161,7 +175,7 @@ class Moving extends Ball {
             this.grounded = true;
             if (!this.clipping) {
                 let relSpeed = [this.speed[0] - target.speed[0], this.speed[1] - target.speed[1]];
-                let dotP = relSpeed[0] * angle[0] + relSpeed[1] * angle[1];
+                let dotP = dotProd(relSpeed, angle);
                 this.speed[0] -= 2 * dotP * angle[0] * target.bounciness + target.friction * relSpeed[0] * Math.abs(angle[1]);
                 this.speed[1] -= 2 * dotP * angle[1] * target.bounciness + target.friction * relSpeed[1] * Math.abs(angle[0]);
                 this.clipping = true;
@@ -180,7 +194,7 @@ class Moving extends Ball {
         for (i in objects) {
             if (objects[i] == this) continue;
             let inCheck = objects[i];
-            let temp = this.getDist(inCheck) - inCheck.radius;
+            let temp = moving.getDist(inCheck) - inCheck.radius;
             close = close[1] > temp || close[1] < 0 ? [inCheck, temp] : close;
         }
         return close[0];
@@ -225,7 +239,7 @@ function mainLoop() {
     if (!controlMode) {
         let direction = [0, 0];
         if (keys["ArrowUp"]) {
-            moving.accelerate(angle[0] * -(moving.grounded ? 0.1 : 0.02), angle[1] * -(moving.grounded ? 0.1 : 0.02));
+            moving.accelerate(angle[0] * -(moving.grounded ? 0.1 : 0.01), angle[1] * -(moving.grounded ? 0.1 : 0.01));
             direction[0] += angle[0];
             direction[1] += angle[1];
         }
@@ -276,6 +290,7 @@ function mainLoop() {
     }
     moving.element.style.background = controlMode ? "radial-gradient(#000, #FFF)" : `linear-gradient(${theta - Math.PI / 2}rad, #FFF, #000)`;
 }
+
 setInterval(mainLoop, 0);
 window.onkeydown = (e) => {
     keys[e.key] = true;
