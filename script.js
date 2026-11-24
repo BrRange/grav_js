@@ -1,300 +1,176 @@
 const body = document.querySelector("body");
+const G = 0.00000001;
 const keys = {};
-const G = 0.01;
-let objects = [];
-let controlMode = false;
-let everyOther = true;
+const objects = [];
 
-const defines = {
-    planetNum: 10,
-    fixedMinSize: 100,
-    fixedMaxSize: 300,
-    moonMinSize: 10,
-    moonMaxSize: 100,
-    ballMinDens: 1,
-    ballMaxDens: 12,
-    farOrbitMult: 10,
-    baseFriction: 0.5,
-    baseBounciness: 0.8
+
+function harmonic(x, y){
+  return 1 / ((1 / x) + (1 / y));
+}
+
+class Vec2{
+  constructor(x = 0, y = 0){
+    this.x = x;
+    this.y = y;
+  }
+  add(v){
+    return new Vec2(this.x + v.x, this.y + v.y);
+  }
+  sub(v){
+    return new Vec2(this.x - v.x, this.y - v.y);
+  }
+  scale(t){
+    return new Vec2(this.x * t, this.y * t);
+  }
+  piecewise(v){
+    return new Vec2(this.x * v.x, this.y * v.y);
+  }
+  dot(v){
+    const pw = this.piecewise(v);
+    return pw.x + pw.y;
+  }
+  mag(){
+    return Math.sqrt(this.dot(this));
+  }
+  normal(){
+    const mag = this.mag();
+    if(!mag) return new Vec2;
+    return new Vec2(this.x / mag, this.y / mag);
+  }
 };
 
-const chances = {
-    haveMoon: 0.6,
-    antiMoon: 0.05,
-    antiFixed: 0.02,
-    moonCounterClock: 0.5,
-    farOrbit: 0.2,
+class Camera{
+  constructor(pos, zoom){
+    this.pos = pos;
+    this.zoom = zoom;
+  }
 };
 
-function dotProd(a, b){
-    return a[0] * b[0] + a[1] * b[1];
-}
-
-function sumProd(x, y, z){
-    return (x + y) * z;
-}
-
-function rayCast(source, target){
-    const lambda = (a, b) => {return [a[0] - b[0], a[1] - b[1]]};
-    const origin = lambda(source.getCenter(), target.getCenter());
-    const direction = source.getAngle(target);
-    const base = dotProd(origin, direction);
-    const root = base * base - dotProd(origin, origin) + target.radius * target.radius;
-    if(root < 0) return -1;
-    return -base - Math.sqrt(root);
-}
-
-function compileMinMax(min, max){
-    return min + sumProd(max, -min, Math.random());
-}
-
-class Ball {
-    constructor(element) {
-        this.element = element
-        this.speed = [0, 0];
-        this.loc = [offsetRNG(15000), offsetRNG(15000)];
-        this.density = compileMinMax(defines.ballMinDens, defines.ballMaxDens);
-        this.friction = defines.baseFriction / this.density;
-        this.bounciness = defines.baseBounciness * this.density / defines.ballMaxDens;
-        objects.push(this);
-    }
-    getCenter() {
-        return [this.loc[0] + this.radius, this.loc[1] + this.radius];
-    }
-    getVector(target) {
-        let center = this.getCenter();
-        let centerEnd = target.getCenter();
-        return [centerEnd[0] - center[0], centerEnd[1] - center[1]];
-    }
-    getDist(target) {
-        let vector = this.getVector(target);
-        return Math.sqrt(vector[0] ** 2 + vector[1] ** 2);
-    }
-    getAngle(target) {
-        let mag = this.getDist(target);
-        if (mag == 0) mag = 1;
-        let vector = this.getVector(target);
-        return [vector[0] / mag, vector[1] / mag];
-    }
-    render(offset) {
-        this.loc[0] -= offset[0];
-        this.loc[1] -= offset[1];
-        this.element.style.left = this.loc[0] + "px";
-        this.element.style.top = this.loc[1] + "px";
-    }
+class Ball{
+  constructor(pos, radius, density, colorNucleus, colorBody, colorBorder){
+    this.pos = pos;
+    this.speed = new Vec2;
+    this.radius = radius;
+    this.density = density;
+    this.bounce = 1;
+    this.element = document.createElement("section");
+    this.element.style.background = `radial-gradient(${colorNucleus}, ${colorBody})`;
+    this.element.style.border = `${this.radius * 0.1}px solid ${colorBorder}`;
+    body.appendChild(this.element);
+  }
+  tick(dt){
+    this.pos = this.pos.add(this.speed.scale(dt));
+  }
+  render(cam){
+    let screenPos = this.pos.sub(cam.pos).sub(new Vec2(this.radius, this.radius)).scale(cam.zoom);
+    const win = new Vec2(window.innerWidth, window.innerHeight).scale(0.5);
+    screenPos = screenPos.add(win);
+    this.element.style.left = `${screenPos.x}px`;
+    this.element.style.top = `${screenPos.y}px`;
+    this.element.style.width = this.element.style.height = `${2 * this.radius * cam.zoom}px`;
+    this.element.style.boxSizing = "border-box";
+    this.element.style.borderWidth = `${this.radius * 0.1 * cam.zoom}px`;
+  }
+  getMass(){
+    return this.radius * this.radius * Math.PI * this.density;
+  }
 };
-class Moon extends Ball {
-    constructor(element, anchor) {
-        super(element);
-        this.anchor = anchor;
-        let diameter = compileMinMax(defines.moonMinSize, defines.moonMaxSize);
-        this.element.style = `background-color: rgb(${this.density * diameter / 3}, ${255 - this.density * 25}, ${this.density + diameter}); width: ${diameter}vh; height: ${diameter}vh; border: #844 solid ${diameter / 5}pt; position: absolute; border-radius: 100%;`;
-        if (Math.random() < chances.antiMoon) {
-            this.density *= -1;
-            this.element.style.background = `radial-gradient(#FFF, rgb(${this.density * diameter / 3}, ${255 - this.density * 25}, ${this.density + diameter}))`;
-            this.element.style.borderColor = "#FFF"
-        }
-        body.appendChild(this.element);
-        this.radius = this.element.offsetHeight / 2;
-        this.mass = this.density * this.radius * this.radius;
-        this.anchorDist = (anchor.radius + this.radius) * (Math.random() + 1);
-        this.deltaTime = Math.random() * Math.PI * 2;
-        if (Math.random() < chances.farOrbit) {
-            this.anchorDist *= defines.farOrbitMult;
-        }
-        let anchorCenter = anchor.getCenter();
-        this.loc = [anchorCenter[0] - this.radius - this.anchorDist * Math.cos(this.deltaTime), anchorCenter[1] - this.radius - this.anchorDist * Math.sin(this.deltaTime)];
-        this.angularSpeed = Math.sqrt(this.anchor.mass * G / this.getDist(this.anchor) / 2) / this.getDist(this.anchor) * (Math.random() < chances.moonCounterClock ? 1 : -1);
+
+class Movable extends Ball{
+  constructor(pos, radius, density, colorNucleus, colorBody, colorBorder){
+    super(pos, radius, density, colorNucleus, colorBody, colorBorder);
+  }
+  gravPull(obj){
+    const diff = obj.pos.sub(this.pos);
+    if(diff.mag())
+      return diff.normal().scale(obj.getMass());
+    return new Vec2;
+  }
+  tick(dt){
+    let forceG = new Vec2;
+    for(const obj of objects){
+      if(this == obj) continue;
+      forceG = forceG.add(this.gravPull(obj));
     }
-    move() {
-        this.deltaTime += this.angularSpeed;
-        this.speed = [
-            this.anchorDist * Math.sin(this.deltaTime) * this.angularSpeed,
-            this.anchorDist * -Math.cos(this.deltaTime) * this.angularSpeed
-        ];
-        this.loc[0] += this.speed[0];
-        this.loc[1] += this.speed[1];
+    for(const obj of objects){
+      if(this == obj) continue;
+      this.collide(obj, dt / 1000);
     }
-    tick() {
-        this.move();
+    this.speed = this.speed.add(forceG.scale(G * dt));
+    this.pos = this.pos.add(this.speed);
+  }
+  collisionDelta(obj){
+    const P = obj.pos.sub(this.pos);
+    const V = obj.speed.sub(this.speed);
+    const R = this.radius + obj.radius;
+    const PV = P.dot(V);
+    const PP = P.dot(P);
+    const VV = V.dot(V);
+    const RR = R * R;
+    if((PV * PV + VV * (RR - PP)) == 0 || VV == 0) return -1;
+    return -(PV + Math.sqrt(PV * PV + VV * (RR - PP))) / VV;
+  }
+  collide(obj, dt){
+    const diff = this.pos.sub(obj.pos);
+    const dist = diff.mag();
+    const radius = this.radius + obj.radius;
+    const bounce = harmonic(this.bounce, obj.bounce);
+    let normal = this.pos.sub(obj.pos).normal();
+    if(dist <= radius) this.pos = this.pos.add(normal.scale(radius - dist));
+    let delta = this.collisionDelta(obj);
+    while(dt > 0 && delta > 0 && delta <= dt){
+      this.pos = this.pos.add(this.speed.scale(delta));
+      obj.pos = obj.pos.add(obj.speed.scale(delta));
+      normal = this.pos.sub(obj.pos).normal();
+      const thisMass = Math.abs(this.getMass());
+      const objMass = Math.abs(obj.getMass());
+      const relSpeed = this.speed.sub(obj.speed);
+      const impulse = (1 + bounce) * relSpeed.dot(normal) * harmonic(thisMass, objMass);
+      this.speed = this.speed.sub(normal.scale(impulse / thisMass));
+      obj.speed = obj.speed.add(normal.scale(impulse / objMass));
+      dt -= delta;
+      delta = this.collisionDelta(obj);
     }
-}
-class Fixed extends Ball {
-    constructor(element) {
-        super(element);
-        let diameter = compileMinMax(defines.fixedMinSize, defines.fixedMaxSize);
-        this.element.style = `background-color: rgb(${this.density * diameter / 3}, ${255 - this.density * 25}, ${this.density + diameter}); width: ${diameter}vh; height: ${diameter}vh; border: #844 solid ${diameter / 5}pt; position: absolute; border-radius: 100%;`;
-        if (Math.random() < chances.antiFixed) {
-            this.density *= -1;
-            this.element.style.background = `radial-gradient(#FFF, rgb(${this.density * diameter / 3}, ${255 - this.density * 25}, ${this.density + diameter}))`;
-            this.element.style.borderColor = "#FFF"
-        }
-        body.appendChild(this.element);
-        this.radius = this.element.offsetHeight / 2;
-        this.mass = this.density * this.radius * this.radius;
-        for (i in objects) {
-            let other = objects[i];
-            if (!(objects[i] instanceof Fixed)) continue;
-            let checkDist = this.getDist(other);
-            if (checkDist / 2 < this.radius + (this.moonSlot ? this.moonSlot.radius + this.moonSlot.anchorDist : 0) + other.radius + (other.moonSlot ? other.moonSlot.radius + other.moonSlot.anchorDist : 0)) {
-                let checkAngle = this.getAngle(other);
-                this.loc[0] += (this.radius + other.radius) * 2 * checkAngle[0];
-                this.loc[1] += (this.radius + other.radius) * 2 * checkAngle[1];
-            }
-        }
-        if (Math.random() < chances.haveMoon) {
-            this.moonSlot = new Moon(document.createElement("section"), this);
-        } else {
-            this.moonSlot = null;
-        }
-    }
-    tick() { }
+    return dt;
+  }
 };
-class Moving extends Ball {
-    constructor(element) {
-        super(element);
-        this.density = 1;
-        this.bounciness = 0.1;
-        this.friction = 0.1;
-        this.clipping = false;
-        this.grounded = false;
-        this.radius = this.element.offsetHeight / 2;
-    }
-    accelerate(x, y) {
-        this.speed[0] += x;
-        this.speed[1] += y;
-    }
-    move() {
-        this.loc[0] += this.speed[0];
-        this.loc[1] += this.speed[1];
-    }
-    collide(target) {
-        let dist = this.getDist(target);
-        let angle = target.getAngle(this);
-        if (dist < this.radius + target.radius) {
-            this.grounded = true;
-            if (!this.clipping) {
-                let relSpeed = [this.speed[0] - target.speed[0], this.speed[1] - target.speed[1]];
-                let dotP = dotProd(relSpeed, angle);
-                this.speed[0] -= 2 * dotP * angle[0] * target.bounciness + target.friction * relSpeed[0] * Math.abs(angle[1]);
-                this.speed[1] -= 2 * dotP * angle[1] * target.bounciness + target.friction * relSpeed[1] * Math.abs(angle[0]);
-                this.clipping = true;
-            } else {
-                this.loc[0] += sumProd(this.radius, target.radius - dist, angle[0]);
-                this.loc[1] += sumProd(this.radius, target.radius - dist, angle[1]);
-                this.clipping = false;
-            }
-        } else {
-            this.clipping = false;
-            this.grounded = false;
-        }
-    }
-    getClosest() {
-        let close = [null, -1];
-        for (i in objects) {
-            if (objects[i] == this) continue;
-            let inCheck = objects[i];
-            let temp = moving.getDist(inCheck) - inCheck.radius;
-            close = close[1] > temp || close[1] < 0 ? [inCheck, temp] : close;
-        }
-        return close[0];
-    }
-    tick() {
-        this.move();
-        this.collide(closest);
-    }
-    devTp(obj) {
-        moving.speed[0] = obj.speed[0];
-        moving.speed[1] = obj.speed[1];
-        moving.loc[0] = obj.loc[0];
-        moving.loc[1] = obj.loc[1];
-    }
-};
-const moving = new Moving(movingElement);
-function offsetRNG(limits) {
-    return sumProd(1, limits * 2, Math.random()) - limits;
-}
-let closest = null;
-for (i = 0; i < defines.planetNum; i++) {
-    new Fixed(document.createElement("section"));
+
+const camera = new Camera(new Vec2, 1);
+const player = new Movable(new Vec2, 20, 1, "#f00", "#ff0", "#f00");
+
+objects.push(player);
+objects.push(new Movable(new Vec2(1000, 2000), 500, 1, "#000", "#0f0", "#0f0"));
+objects.push(new Movable(new Vec2(-10000, 2000), 2500, 1, "#000", "#0f0", "#0f0"));
+objects.push(new Movable(new Vec2(1000, -20000), 800, 1, "#000", "#0f0", "#0f0"));
+objects.push(new Movable(new Vec2(100000, -200000), 200, 2, "#000", "#0f0", "#0f0"));
+objects.push(new Movable(new Vec2(100000, 200000), 800, 1, "#000", "#0f0", "#0f0"));
+objects.push(new Movable(new Vec2(10, 1), 20, 1, "#fff", "#0f0", "#0f0"));
+
+var globalTimer = 0;
+const FPS = 60;
+
+function mainLoop(currentTimer){
+  const dt = currentTimer - globalTimer;
+  if(dt < 1000 / FPS){
+    requestAnimationFrame(mainLoop);
+    return;
+  }
+  if(keys['1']) camera.zoom = 1;
+  if(keys['2']) camera.zoom = 0.01;
+  globalTimer = currentTimer;
+  for(const obj of objects) obj.tick(dt);
+  for(const obj of objects) obj.render(camera);
+  camera.pos = camera.pos.add(player.pos.sub(camera.pos).scale(0.9));
+  requestAnimationFrame(mainLoop);
 }
 
-function mainLoop() {
-    if (everyOther) closest = moving.getClosest();
-    everyOther = !everyOther;
-    let angle = moving.getAngle(closest);
-    if (!moving.clipping && !everyOther) {
-        for (i in objects) {
-            if (objects[i] instanceof Moving) continue;
-            let inCheck = objects[i];
-            let anglle = moving.getAngle(inCheck);
-            let dist = moving.getDist(inCheck);
-            let coef = inCheck.mass * G / dist / dist;
-            moving.accelerate(coef * anglle[0], coef * anglle[1]);
-        }
-    }
-    let mCenter = moving.getCenter();
-    let fCenter = closest.getCenter();
-    let theta = Math.atan2(fCenter[1] - mCenter[1], fCenter[0] - mCenter[0]);
-    if (!controlMode) {
-        let direction = [0, 0];
-        if (keys["ArrowUp"]) {
-            moving.accelerate(angle[0] * -(moving.grounded ? 0.1 : 0.01), angle[1] * -(moving.grounded ? 0.1 : 0.01));
-            direction[0] += angle[0];
-            direction[1] += angle[1];
-        }
-        if (keys["ArrowLeft"]) {
-            moving.accelerate(angle[1] * -0.01, angle[0] * 0.01);
-            direction[0] += angle[1];
-            direction[1] -= angle[0];
-        }
-        if (keys["ArrowRight"]) {
-            moving.accelerate(angle[1] * 0.01, angle[0] * -0.01);
-            direction[0] -= angle[1];
-            direction[1] += angle[0];
-        }
-        if (keys["ArrowDown"]) {
-            moving.accelerate(angle[0] * 0.01, angle[1] * 0.01);
-            direction[0] -= angle[0];
-            direction[1] -= angle[1];
-        }
-        if(direction[0] || direction[1]) moving.element.style.boxShadow = `${direction[0] * 10}px ${direction[1] * 10}px 20px #FF0`;
-        else moving.element.style.boxShadow = "";
-    } else {
-        let direction = [0, 0];
-        if (keys["ArrowLeft"]) {
-            direction[0] -= 1;
-            moving.element.style.borderRightColor = "#FF0";
-        } else moving.element.style.borderRightColor = "";
-        if (keys["ArrowRight"]) {
-            direction[0] += 1;
-            moving.element.style.borderLeftColor = "#FF0";
-        } else moving.element.style.borderLeftColor = "";
-        if (keys["ArrowUp"]) {
-            direction[1] -= 1;
-            moving.element.style.borderBottomColor = "#FF0";
-        } else moving.element.style.borderBottomColor = "";
-        if (keys["ArrowDown"]) {
-            direction[1] += 1;
-            moving.element.style.borderTopColor = "#FF0";
-        } else moving.element.style.borderTopColor = "";
-        let norm = Math.sqrt(direction[0] ** 2 + direction[1] ** 2);
-        if (norm == 0) norm = 1;
-        moving.accelerate(0.03 * direction[0] / norm, 0.03 * direction[1] / norm);
-    }
-    let focusCenter = (keys["Control"] ? closest : moving).getCenter();
-    let camOffset = [focusCenter[0] - window.innerWidth / 2, focusCenter[1] - window.innerHeight / 2];
-    for (i in objects) {
-        objects[i].tick();
-        objects[i].render(camOffset);
-    }
-    moving.element.style.background = controlMode ? "radial-gradient(#000, #FFF)" : `linear-gradient(${theta - Math.PI / 2}rad, #FFF, #000)`;
-}
+for(const obj of objects) obj.render(camera);
+requestAnimationFrame(mainLoop);
 
-setInterval(mainLoop, 0);
 window.onkeydown = (e) => {
     keys[e.key] = true;
 }
+
 window.onkeyup = (e) => {
     keys[e.key] = false;
     if (e.key == "Shift") {
